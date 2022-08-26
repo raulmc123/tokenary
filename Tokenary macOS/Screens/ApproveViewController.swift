@@ -5,6 +5,8 @@ import WalletConnect
 
 class ApproveViewController: NSViewController {
     
+    @IBOutlet weak var buttonsStackView: NSStackView!
+    @IBOutlet weak var progressIndicator: NSProgressIndicator!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
     @IBOutlet weak var okButton: NSButton!
@@ -13,9 +15,11 @@ class ApproveViewController: NSViewController {
         didSet {
             peerLogoImageView.wantsLayer = true
             peerLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
+            peerLogoImageView.layer?.cornerRadius = 5
         }
     }
     
+    private var subject: ApprovalSubject!
     private var approveTitle: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
@@ -25,6 +29,7 @@ class ApproveViewController: NSViewController {
     static func with(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.completion = completion
+        new.subject = subject
         new.meta = meta
         new.approveTitle = subject.title
         new.peerMeta = peerMeta
@@ -46,6 +51,7 @@ class ApproveViewController: NSViewController {
                 peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
                     if case .success = result {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                        peerLogoImageView?.layer?.cornerRadius = 0
                     }
                 }
             }
@@ -55,6 +61,15 @@ class ApproveViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        view.window?.makeFirstResponder(view)
+    }
+    
+    func enableWaiting() {
+        guard subject == .approveTransaction else { return }
+        buttonsStackView.isHidden = true
+        progressIndicator.isHidden = false
+        progressIndicator.startAnimation(nil)
+        titleLabel.stringValue = Strings.sendingTransaction
     }
     
     private func updateDisplayedMeta() {

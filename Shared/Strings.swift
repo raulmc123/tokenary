@@ -82,8 +82,16 @@ struct Strings {
     static let multicoinWallet = "Multicoin Wallet"
     static let privateKeyWallets = "Private Key Wallets"
     static let editAccounts = "Edit accounts"
-    static let removingTheLastAccount = "Removing the last account removes a wallet as well"
+    static let removingTheLastAccount = "Removing the last account removes the wallet as well"
     static let selectNetworkOptionally = "Select network (optionally)"
     static let isSelected = "Selected"
+    static let data = "Data"
+    static let viewOnNearExplorer = "View on Near explorer"
+    static let sendingTransaction = "Sending a transaction"
+    static let disconnect = "Disconnect"
+    static let switchAccount = "Switch Account"
+    static let switchAccountTwoLines = "Switch\nAccount"
+    static let unknownNetwork = "Unknown network ⚠️"
+    static let addAccountToConnect = "Add %@ account to connect"
     
 }

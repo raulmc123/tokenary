@@ -6,14 +6,19 @@ import WalletCore
 enum DappRequestAction {
     case none
     case justShowApp
+    case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
     case approveTransaction(SendTransactionAction)
 }
 
 struct SelectAccountAction {
-    let provider: Web3Provider
-    let completion: (EthereumChain?, TokenaryWallet?, Account?) -> Void
+    let peer: PeerMeta?
+    let coinType: CoinType?
+    var selectedAccounts: Set<SpecificWalletAccount>
+    let initiallyConnectedProviders: Set<Web3Provider>
+    let initialNetwork: EthereumChain?
+    let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
 }
 
 struct SignMessageAction {

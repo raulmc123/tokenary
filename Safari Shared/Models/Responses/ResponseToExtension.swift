@@ -5,14 +5,16 @@ import Foundation
 struct ResponseToExtension {
     
     let id: Int
-    let json: [String: AnyHashable]
+    let json: [String: Any]
     
     enum Body {
         case ethereum(Ethereum)
         case solana(Solana)
         case tezos(Tezos)
+        case near(Near)
+        case multiple(Multiple)
         
-        var json: [String: AnyHashable] {
+        var json: [String: Any] {
             let data: Data?
             let jsonEncoder = JSONEncoder()
             
@@ -21,11 +23,21 @@ struct ResponseToExtension {
                 data = try? jsonEncoder.encode(body)
             case .solana(let body):
                 data = try? jsonEncoder.encode(body)
+            case .near(let body):
+                data = try? jsonEncoder.encode(body)
             case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
+            case .multiple(let body):
+                let dict: [String: Any] = [
+                    "bodies": body.bodies.map { $0.json },
+                    "providersToDisconnect": body.providersToDisconnect.map { $0.rawValue },
+                    "provider": provider.rawValue
+                ]
+                return dict
             }
             
-            if let data = data, let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: AnyHashable] {
+            if let data = data, var dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                dict["provider"] = provider.rawValue
                 return dict
             } else {
                 return [:]
@@ -38,19 +50,20 @@ struct ResponseToExtension {
                 return .ethereum
             case .solana:
                 return .solana
+            case .near:
+                return .near
             case .tezos:
                 return .tezos
+            case .multiple:
+                return .multiple
             }
         }
     }
     
     init(for request: SafariRequest, body: Body? = nil, error: String? = nil) {
         self.id = request.id
-        let provider = (body?.provider ?? request.provider).rawValue
-        
-        var json: [String: AnyHashable] = [
+        var json: [String: Any] = [
             "id": request.id,
-            "provider": provider,
             "name": request.name
         ]
         
@@ -58,15 +71,15 @@ struct ResponseToExtension {
             json["error"] = error
         }
         
-        var bodyJSON = body?.json ?? [:]
+        let bodyJSON = body?.json ?? [:]
         json.merge(bodyJSON) { (current, _) in current }
-        
-        if request.body.value.responseUpdatesStoredConfiguration {
-            if !bodyJSON.isEmpty {
-                bodyJSON["provider"] = provider
+                
+        if request.body.value.responseUpdatesStoredConfiguration, error == nil {
+            if let bodies = bodyJSON["bodies"] {
+                json["configurationToStore"] = bodies
+            } else {
+                json["configurationToStore"] = bodyJSON
             }
-            
-            json["configurationToStore"] = bodyJSON
         }
         
         self.json = json

@@ -11,6 +11,8 @@ enum EthereumChain: Int {
     case avalanche = 43114
     case gnosisChain = 100
     case fantomOpera = 250
+    case celo = 42220
+    case aurora = 1313161554
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -24,6 +26,7 @@ enum EthereumChain: Int {
     case binanceTestnet = 97
     case avalancheFuji = 43113
     case fantomTestnet = 4002
+    case neonDevnet = 245022926
     
     var id: Int {
         return rawValue
@@ -33,8 +36,17 @@ enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
-    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet]
+    static func withChainId(_ chainId: String?) -> EthereumChain? {
+        guard let chainId = chainId else { return nil }
+        if let rawValue = Int(chainId.dropFirst(2), radix: 16) {
+            return EthereumChain(rawValue: rawValue)
+        } else {
+            return nil
+        }
+    }
+    
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora]
+    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
     var name: String {
         switch self {
@@ -46,6 +58,8 @@ enum EthereumChain: Int {
         case .avalanche: return "Avalanche"
         case .gnosisChain: return "Gnosis Chain"
         case .fantomOpera: return "Fantom Opera"
+        case .celo: return "Celo"
+        case .aurora: return "Aurora"
             
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
@@ -58,6 +72,7 @@ enum EthereumChain: Int {
         case .binanceTestnet: return "BNB Testnet"
         case .avalancheFuji: return "Avalanche FUJI"
         case .fantomTestnet: return "Fantom Testnet"
+        case .neonDevnet: return "Neon Devnet"
         }
     }
     
@@ -67,7 +82,7 @@ enum EthereumChain: Int {
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
-        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
+        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten, .aurora:
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
@@ -75,6 +90,10 @@ enum EthereumChain: Int {
             return "xDai"
         case .fantomOpera, .fantomTestnet:
             return "FTM"
+        case .celo:
+            return "CELO"
+        case .neonDevnet:
+            return "NEON"
         }
     }
     
@@ -101,6 +120,8 @@ enum EthereumChain: Int {
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .gnosisChain: return "https://rpc.gnosischain.com/"
         case .fantomOpera: return "https://rpc.ftm.tools/"
+        case .celo: return "https://rpc.ankr.com/celo"
+        case .aurora: return "https://mainnet.aurora.dev"
             
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
@@ -113,6 +134,7 @@ enum EthereumChain: Int {
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
         case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
         case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
+        case .neonDevnet: return "https://proxy.devnet.neonlabs.org/solana"
         }
     }
     

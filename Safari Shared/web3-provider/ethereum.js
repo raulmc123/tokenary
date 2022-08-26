@@ -11,6 +11,15 @@ import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
 class TokenaryEthereum extends EventEmitter {
+    
+    _metamask = {
+        isUnlocked: () => {
+            return new Promise((resolve) => {
+                resolve(true);
+            });
+        },
+    };
+    
     constructor() {
         super();
         const config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
@@ -19,19 +28,35 @@ class TokenaryEthereum extends EventEmitter {
         this.callbacks = new Map();
         this.wrapResults = new Map();
         this.isMetaMask = true;
-        this._metamask = true;
+        this._isConnected = true;
+        this._initialized = true;
+        this._isUnlocked = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
+        this.didEmitConnectAfterSubscription = false;
         this.didGetLatestConfiguration = false;
         this.pendingPayloads = [];
         
         const originalOn = this.on;
         this.on = (...args) => {
             if (args[0] == "connect") {
-                setTimeout( function() { window.ethereum.emitConnect(config.chainId); }, 1);
+                setTimeout( function() {
+                    if (!window.ethereum.didEmitConnectAfterSubscription) {
+                        window.ethereum.emitConnect(window.ethereum.chainId);
+                        window.ethereum.didEmitConnectAfterSubscription = true;
+                    }
+                }, 1);
             }
             return originalOn.apply(this, args);
         };
+        
+        setTimeout( function() { window.ethereum.emit("_initialized"); }, 1);
+    }
+    
+    externalDisconnect() {
+        this.setAddress("");
+        window.ethereum.emit("disconnect");
+        window.ethereum.emit("accountsChanged", []);
     }
     
     setAddress(address) {
@@ -54,6 +79,7 @@ class TokenaryEthereum extends EventEmitter {
         
         if (window.ethereum.chainId != chainId) {
             window.ethereum.chainId = chainId;
+            window.ethereum.networkVersion = this.net_version();
             if (eventName != "didLoadLatestConfiguration") {
                 window.ethereum.emit("chainChanged", chainId);
                 window.ethereum.emit("networkChanged", window.ethereum.net_version());
@@ -65,10 +91,10 @@ class TokenaryEthereum extends EventEmitter {
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
         this.setAddress(config.address);
+        this.networkVersion = this.net_version();
     }
     
     request(payload) {
-        // this points to window in methods like web3.eth.getAccounts()
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
@@ -76,9 +102,6 @@ class TokenaryEthereum extends EventEmitter {
         return that._request(payload, false);
     }
     
-    /**
-     * @deprecated Listen to "connect" event instead.
-     */
     isConnected() {
         return true;
     }
@@ -87,11 +110,7 @@ class TokenaryEthereum extends EventEmitter {
         return Promise.resolve(true);
     }
     
-    /**
-     * @deprecated Use request({method: "eth_requestAccounts"}) instead.
-     */
     enable() {
-        console.log('enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.');
         if (!window.ethereum.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         } else {
@@ -99,10 +118,7 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @deprecated Use request() method instead.
-     */
-    send(payload) {
+    send(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
@@ -113,16 +129,19 @@ class TokenaryEthereum extends EventEmitter {
         } else {
             requestPayload.method = payload;
         }
+        
+        if (typeof payload.params !== "undefined") {
+            requestPayload.params = payload.params;
+        }
 
-        return that._request(requestPayload, false);
+        if (typeof callback !== "undefined") {
+            that.sendAsync(requestPayload, callback);
+        } else {
+            return that._request(requestPayload, false);
+        }
     }
     
-    /**
-     * @deprecated Use request() method instead.
-     */
     sendAsync(payload, callback) {
-        console.log("sendAsync(data, callback) is deprecated, please use window.ethereum.request(data) instead.");
-        // this points to window in methods like web3.eth.getAccounts()
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
@@ -139,11 +158,8 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal rpc handler
-     */
     _request(payload, wrapResult = true) {
-        this.idMapping.tryIntifyId(payload);
+        this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();
@@ -175,6 +191,8 @@ class TokenaryEthereum extends EventEmitter {
                 case "eth_requestAccounts":
                 case "wallet_addEthereumChain":
                 case "wallet_switchEthereumChain":
+                case "wallet_requestPermissions":
+                case "wallet_getPermissions":
                     return this._processPayload(payload);
                 case "eth_newFilter":
                 case "eth_newBlockFilter":
@@ -233,6 +251,10 @@ class TokenaryEthereum extends EventEmitter {
                 return this.wallet_addEthereumChain(payload);
             case "wallet_switchEthereumChain":
                 return this.wallet_switchEthereumChain(payload);
+            case "wallet_requestPermissions":
+            case "wallet_getPermissions":
+                const permissions = [{"parentCapability": "eth_accounts"}];
+                return this.sendResponse(payload.id, permissions);
         }
     }
     
@@ -270,7 +292,6 @@ class TokenaryEthereum extends EventEmitter {
         const message = payload.params[0];
         const buffer = Utils.messageToBuffer(message);
         if (buffer.length === 0) {
-            // hex it
             const hex = Utils.bufferToHex(message);
             this.postMessage("signPersonalMessage", payload.id, { data: hex });
         } else {
@@ -312,6 +333,8 @@ class TokenaryEthereum extends EventEmitter {
     wallet_switchEthereumChain(payload) {
         if (this.chainId != payload.params[0].chainId) {
             this.postMessage("switchEthereumChain", payload.id, payload.params[0]);
+        } else {
+            this.sendResponse(payload.id, [this.address]);
         }
     }
     
@@ -353,9 +376,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal js -> native message handler
-     */
     postMessage(handler, id, data) {
         if (this.ready || handler === "requestAccounts") {
             let object = {
@@ -365,14 +385,10 @@ class TokenaryEthereum extends EventEmitter {
             };
             window.tokenary.postMessage(handler, id, object, "ethereum");
         } else {
-            // don't forget to verify in the app
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
         }
     }
     
-    /**
-     * @private Internal native result -> js
-     */
     sendResponse(id, result) {
         let originId = this.idMapping.tryPopId(id) || id;
         let callback = this.callbacks.get(id);
@@ -391,9 +407,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal native error -> js
-     */
     sendError(id, error) {
         console.log(`<== ${id} sendError ${error}`);
         let callback = this.callbacks.get(id);

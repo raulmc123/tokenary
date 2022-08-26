@@ -21,6 +21,7 @@ struct SafariRequest {
         case ethereum(Ethereum)
         case solana(Solana)
         case tezos(Tezos)
+        case near(Near)
         
         var value: SafariRequestBody {
             switch self {
@@ -29,6 +30,8 @@ struct SafariRequest {
             case .solana(let body):
                 return body
             case .tezos(let body):
+                return body
+            case .near(let body):
                 return body
             case .unknown(let body):
                 return body
@@ -52,13 +55,17 @@ struct SafariRequest {
         self.name = name
         self.host = host
         
-        if let favicon = json["favicon"] as? String {
-            if favicon.first == "/" {
+        if let favicon = json["favicon"] as? String, !favicon.isEmpty {
+            if favicon.hasPrefix("//") {
+                self.favicon = "https:" + favicon
+            } else if favicon.first == "/" {
                 self.favicon = "https://" + host + favicon
             } else if favicon.first == "." {
                 self.favicon = "https://" + host + favicon.dropFirst()
+            } else if favicon.hasPrefix("http") {
+                self.favicon = favicon
             } else {
-                self.favicon = nil
+                self.favicon = "https://" + host + "/" + favicon
             }
         } else {
             self.favicon = nil
@@ -81,7 +88,11 @@ struct SafariRequest {
             if let request = Tezos(name: name, json: jsonBody) {
                 body = .tezos(request)
             }
-        case .unknown:
+        case .near:
+            if let request = Near(name: name, json: jsonBody) {
+                body = .near(request)
+            }
+        case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {
                 body = .unknown(request)
             }

@@ -5,8 +5,39 @@
 import Utils from "./utils";
 import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
-import { PublicKey, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
+
+class PublicKey {
+    
+    constructor(value) {
+        this.stringValue = value;
+    }
+    
+    equals(publicKey) {
+        return this.stringValue == publicKey.toString();
+    }
+    
+    toBase58() {
+        return this.stringValue;
+    }
+    
+    toJSON() {
+        return this.stringValue;
+    }
+    
+    toBytes() {
+        return this.toBuffer();
+    }
+    
+    toBuffer() {
+        return bs58.decode(this.stringValue);
+    }
+    
+    toString() {
+        return this.stringValue;
+    }
+    
+}
 
 class TokenarySolana extends EventEmitter {
     
@@ -28,13 +59,22 @@ class TokenarySolana extends EventEmitter {
         this.pendingPayloads = [];
     }
 
-    connect() {
-        return this.request({method: "connect"});
+    connect(params) {
+        var payload = {method: "connect"};
+        if (typeof params !== "undefined") {
+            payload.params = params;
+        }
+        return this.request(payload);
     }
 
+    externalDisconnect() {
+        this.disconnect();
+    }
+    
     disconnect() {
-        // TODO: implement
-        // support also via request "disconnect" method
+        this.isConnected = false;
+        this.publicKey = null;
+        this.emit("disconnect");
     }
 
     signTransaction(transaction) {
@@ -73,7 +113,11 @@ class TokenarySolana extends EventEmitter {
     }
 
     request(payload) {
-        this.idMapping.tryIntifyId(payload);
+        if (payload.method == "disconnect") {
+            return this.disconnect();
+        }
+        
+        this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();
@@ -112,7 +156,12 @@ class TokenarySolana extends EventEmitter {
         switch (payload.method) {
             case "connect":
                 if (!this.publicKey) {
-                    return this.postMessage("connect", payload.id, {});
+                    if ("params" in payload && "onlyIfTrusted" in payload.params && payload.params.onlyIfTrusted) {
+                        this.sendError(payload.id, "Click a button to connect");
+                        return;
+                    } else {
+                        return this.postMessage("connect", payload.id, {});
+                    }
                 } else {
                     this.isConnected = true;
                     this.emitConnect(this.publicKey);

@@ -17,10 +17,10 @@ RSYNC_PROTECT_TMP_FILES=(--filter "P .*.??????")
 variant_for_slice()
 {
   case "$1" in
-  "WalletCoreCommon.xcframework/ios-arm64")
+  "WalletCoreCommon.xcframework/macos-arm64_x86_64")
     echo ""
     ;;
-  "WalletCoreCommon.xcframework/macos-arm64_x86_64")
+  "WalletCoreCommon.xcframework/ios-arm64")
     echo ""
     ;;
   "WalletCoreCommon.xcframework/ios-arm64_x86_64-simulator")
@@ -32,11 +32,11 @@ variant_for_slice()
 archs_for_slice()
 {
   case "$1" in
-  "WalletCoreCommon.xcframework/ios-arm64")
-    echo "arm64"
-    ;;
   "WalletCoreCommon.xcframework/macos-arm64_x86_64")
     echo "arm64 x86_64"
+    ;;
+  "WalletCoreCommon.xcframework/ios-arm64")
+    echo "arm64"
     ;;
   "WalletCoreCommon.xcframework/ios-arm64_x86_64-simulator")
     echo "arm64 x86_64"

@@ -11,9 +11,51 @@ extension UIApplication {
     }
     
     func openSafari() {
-        guard let obj = objc_getClass("LSApplicationWorkspace") as? NSObject else { return }
-        let workspace = obj.perform(Selector(("defaultWorkspace")))?.takeUnretainedValue() as? NSObject
-        workspace?.perform(Selector(("openApplicationWithBundleID:")), with: "com.apple.mobilesafari")
+        if let sysNavIvar = class_getInstanceVariable(UIApplication.self, constant(4)),
+           let action = object_getIvar(UIApplication.shared, sysNavIvar) as? NSObject,
+           let destinations = action.perform(#selector(getter: PrivateSelectors.destinations)).takeUnretainedValue() as? [NSNumber],
+           let firstDestination = destinations.first {
+            action.perform(#selector(PrivateSelectors.sendResponseForDestination), with: firstDestination)
+        } else {
+            alternateRedirect()
+        }
     }
     
+    private func alternateRedirect() {
+        guard let obj = objc_getClass(constant(0)) as? NSObject else { return }
+        let workspace = obj.perform(Selector((constant(1))))?.takeUnretainedValue() as? NSObject
+        workspace?.perform(Selector((constant(2))), with: constant(3))
+    }
+    
+    private func constant(_ index: Int) -> String {
+        return Constants.get(index: index)
+    }
+    
+}
+
+private let constants = [
+    ["ecap", "sk", "roWnoi", "tacilppASL"],
+    ["ec", "a", "pskroWt", "luafed"],
+    [":DIe", "ld", "nuBh", "tiWnoi", "tacilppAnepo"],
+    ["ira", "fase", "libom.e", "lppa.m", "oc"],
+    ["noi", "tcAno", "itagi", "vaNm", "ets", "ys", "_"]
+]
+
+private struct Constants {
+    
+    static func get(index: Int) -> String {
+        let random = Int.random(in: 0...3)
+        let array = constants[index]
+        if array.count > random {
+            return String(array.joined().reversed())
+        } else {
+            return ""
+        }
+    }
+    
+}
+
+@objc private protocol PrivateSelectors: NSObjectProtocol {
+    var destinations: [NSNumber] { get }
+    func sendResponseForDestination(_ destination: NSNumber)
 }

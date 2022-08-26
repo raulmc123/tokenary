@@ -1,6 +1,8 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
-const pendingRequestsIds = new Set();
+if (!("pendingRequestsIds" in document)) {
+    document.pendingRequestsIds = new Set();
+}
 
 function injectScript() {
     try {
@@ -84,57 +86,36 @@ if (shouldInjectProvider()) {
 }
 
 function getLatestConfiguration() {
-    const storageItem = browser.storage.local.get(window.location.host);
-    storageItem.then((storage) => {
-        var response = {};
-        
-        const latest = storage[window.location.host];
-        if (typeof latest !== "undefined") {
-            response = latest;
-        }
-        
-        response.name = "didLoadLatestConfiguration";
+    const request = {subject: "getLatestConfiguration", host: window.location.host};
+    browser.runtime.sendMessage(request).then((response) => {
         const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
 
-function storeConfigurationIfNeeded(request) {
-    if (window.location.host.length > 0 && "configurationToStore" in request) {
-        const latest = request.configurationToStore;
-        browser.storage.local.set( {[window.location.host]: latest});
-    }
-}
-
 function sendToInpage(response, id) {
-    if (pendingRequestsIds.has(id)) {
-        pendingRequestsIds.delete(id);
+    if (document.pendingRequestsIds.has(id)) {
+        document.pendingRequestsIds.delete(id);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
-        storeConfigurationIfNeeded(response);
     }
 }
 
 function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
-    pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message }).then((response) => {
+    document.pendingRequestsIds.add(message.id);
+    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
         sendToInpage(response, message.id);
     });
     platformSpecificProcessMessage(message); // iOS opens app here
 }
 
-function didTapExtensionButton() {
-    const id = genId();
-    const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
-    // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
-    sendMessageToNativeApp(message);
-}
-
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
-        didTapExtensionButton();
+        sendResponse(window.location.host);
+    } else if ("name" in request && request.name == "switchAccount") {
+        sendMessageToNativeApp(request);
     }
 });
 
@@ -146,10 +127,18 @@ window.addEventListener("message", function(event) {
 });
 
 var getFavicon = function() {
+    if (document.favicon) {
+        return document.favicon;
+    }
+    
     var nodeList = document.getElementsByTagName("link");
     for (var i = 0; i < nodeList.length; i++) {
-        if ((nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
-            return nodeList[i].getAttribute("href");
+        if ((nodeList[i].getAttribute("rel") == "apple-touch-icon") || (nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
+            const favicon = nodeList[i].getAttribute("href");
+            if (!favicon.endsWith("svg")) {
+                document.favicon = favicon;
+                return favicon;
+            }
         }
     }
     return "";
