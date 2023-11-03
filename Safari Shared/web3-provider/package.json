@@ -1,21 +1,20 @@
 {
     "name": "tokenary-web3-provider",
     "version": "1.0.0",
-    "description": "Tokenary Web3 Provider",
+    "description": "tokenary web3 provider",
     "main": "index.js",
     "scripts": {
-        "build": "npx browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs > ../Resources/inpage.js",
-        "lint": "eslint . --fix"
+        "prebuild": "if [ ! -d node_modules ]; then yarn install; fi",
+        "build": "browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -o ../Resources/inpage.js"
     },
     "repository": {
         "type": "git",
         "url": "git+ssh://git@github.com/zeriontech/Tokenary.git"
     },
     "keywords": [],
-    "author": "Tokenary <support@tokenary.io>",
+    "author": "tokenary <support@tokenary.io>",
     "license": "MIT",
     "dependencies": {
-        "bs58": "^5.0.0",
         "buffer": "^5.6.0",
         "events": "^3.2.0",
         "isutf8": "^3.1.1"
@@ -25,9 +24,6 @@
         "@babel/preset-env": "^7.16.11",
         "babelify": "^10.0.0",
         "browserify": "^17.0.0",
-        "eslint": "^8.7.0",
-        "ethereumjs-util": "^7.0.5",
-        "jest": "^27.4.7",
         "uglify-js": "^3.15.0"
     }
 }

@@ -24,7 +24,7 @@ struct Strings {
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
     static let viewOnGithub = "View on GitHub"
-    static let viewOnTwitter = "View on Twitter"
+    static let viewOnX = "View on 𝕏"
     static let walletConnectClientDescription = "Crypto wallet for macOS"
     static let start = "Start"
     static let removeAccount = "Remove account"
@@ -34,7 +34,7 @@ struct Strings {
     static let enterKeystorePassword = "Enter keystore password"
     static let importWalletTextFieldPlaceholder = "Options:\n\n• Private Key\n• Secret Words\n• Keystore"
     static let failedToImportWallet = "Failed to import wallet"
-    static let welcomeScreenText = "Sign crypto transactions.\n\nIn any browser.\n\nOn any website."
+    static let welcomeScreenText = "Sign crypto transactions.\n\nIn Safari.\n\nOn any website."
     static let createPassword = "Create Password"
     static let repeatPassword = "Repeat Password"
     static let enterPassword = "Enter Password"
@@ -93,5 +93,8 @@ struct Strings {
     static let switchAccountTwoLines = "Switch\nAccount"
     static let unknownNetwork = "Unknown network ⚠️"
     static let addAccountToConnect = "Add %@ account to connect"
+    static let thisAppVersionIsNoLongerSupported = "this app version is no longer supported 🥺"
+    static let pleaseGetANewOne = "please get a new one"
+    static let notNow = "not now"
     
 }

@@ -4,8 +4,7 @@
 "use strict";
 
 import TokenaryEthereum from "./ethereum";
-import TokenarySolana from "./solana";
-import TokenaryNear from "./near";
+import ProviderRpcError from "./error";
 
 window.tokenary = {};
 window.tokenary.postMessage = (name, id, body, provider) => {
@@ -13,25 +12,34 @@ window.tokenary.postMessage = (name, id, body, provider) => {
     window.postMessage({direction: "from-page-script", message: message}, "*");
 };
 
+window.tokenary.disconnect = (provider) => {
+    const disconnectRequest = {subject: "disconnect", provider: provider};
+    window.postMessage(disconnectRequest, "*");
+};
+
 // - MARK: Ethereum
 
-window.ethereum = new TokenaryEthereum();
-window.web3 = {currentProvider: window.ethereum};
-window.metamask = window.ethereum;
+let provider = new TokenaryEthereum();
+window.tokenary.eth = provider;
+window.ethereum = provider;
+window.web3 = {currentProvider: provider};
+window.metamask = provider;
 window.dispatchEvent(new Event('ethereum#initialized'));
 
-// - MARK: Solana
+// MARK: EIP-6963
 
-window.solana = new TokenarySolana();
-window.tokenarySolana = window.solana;
-window.phantom = {solana: window.solana};
-window.dispatchEvent(new Event("solana#initialized"));
+function announceProvider() {
+    const info = {
+        uuid: "f9058af0-b501-43c4-bd7d-b43f83244681",
+        name: "tokenary",
+        icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSJ3aGl0ZSIvPgo8Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI0MC44NzUiIGZpbGw9IiMyQzdDRjUiLz4KPC9zdmc+Cg==',
+        rdns: "io.tokenary"
+    };
+    window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info, provider }), }));
+}
 
-// - MARK: Near
-
-window.near = new TokenaryNear();
-window.sender = window.near;
-window.dispatchEvent(new Event("near#initialized"));
+window.addEventListener("eip6963:requestProvider", function(event) { announceProvider(); });
+announceProvider();
 
 // - MARK: Process content script messages
 
@@ -42,7 +50,7 @@ window.addEventListener("message", function(event) {
         
         if ("latestConfigurations" in response) {
             const name = "didLoadLatestConfiguration";
-            var remainingProviders = new Set(["ethereum", "solana", "near"]);
+            var remainingProviders = new Set(["ethereum"]);
             
             for(let configurationResponse of response.latestConfigurations) {
                 configurationResponse.name = name;
@@ -59,16 +67,10 @@ window.addEventListener("message", function(event) {
     }
 });
 
-function deliverResponseToSpecificProvider(id, response, provider) {
-    switch (provider) {
+function deliverResponseToSpecificProvider(id, response, providerName) {
+    switch (providerName) {
         case "ethereum":
-            window.ethereum.processTokenaryResponse(id, response);
-            break;
-        case "solana":
-            window.solana.processTokenaryResponse(id, response);
-            break;
-        case "near":
-            window.near.processTokenaryResponse(id, response);
+            provider.processTokenaryResponse(id, response);
             break;
         case "multiple":
             response.bodies.forEach((body) => {
@@ -77,16 +79,10 @@ function deliverResponseToSpecificProvider(id, response, provider) {
                 deliverResponseToSpecificProvider(id, body, body.provider);
             });
             
-            response.providersToDisconnect.forEach((provider) => {
-                switch (provider) {
+            response.providersToDisconnect.forEach((providerName) => {
+                switch (providerName) {
                     case "ethereum":
-                        window.ethereum.externalDisconnect();
-                        break;
-                    case "solana":
-                        window.solana.externalDisconnect();
-                        break;
-                    case "near":
-                        window.near.externalDisconnect();
+                        provider.externalDisconnect();
                         break;
                     default:
                         break;
@@ -96,8 +92,6 @@ function deliverResponseToSpecificProvider(id, response, provider) {
             break;
         default:
             // pass unknown provider message to all providers
-            window.ethereum.processTokenaryResponse(id, response);
-            window.solana.processTokenaryResponse(id, response);
-            window.near.processTokenaryResponse(id, response);
+            provider.processTokenaryResponse(id, response);
     }
 }

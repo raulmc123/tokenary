@@ -1,34 +1,20 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Foundation
-import Web3Swift
 
-final class EthereumNetwork: Network {
+struct EthereumNetwork: Codable, Equatable {
     
-    private static var netwotkForChain = [EthereumChain: Network]()
+    let chainId: Int
+    let name: String
+    let symbol: String
+    let nodeURLString: String
+    let isTestnet: Bool
+    let mightShowPrice: Bool
     
-    static func forChain(_ chain: EthereumChain) -> Network {
-        if let network = netwotkForChain[chain] {
-            return network
-        } else {
-            let network = EthereumNetwork(url: chain.nodeURLString)
-            netwotkForChain[chain] = network
-            return network
-        }
-    }
+    var symbolIsETH: Bool { return symbol == "ETH" }
+    var chainIdHexString: String { String.hex(chainId, withPrefix: true) }
+    var isEthMainnet: Bool { return chainId == EthereumNetwork.ethMainnetChainId }
     
-    private let origin: GethNetwork
-    
-    init(url: String) {
-        origin = GethNetwork(url: url)
-    }
-    
-    func id() throws -> IntegerScalar {
-        return try origin.id()
-    }
-    
-    func call(method: String, params: [EthParameter]) throws -> Data {
-        return try origin.call(method: method, params: params)
-    }
+    static let ethMainnetChainId = 1
     
 }

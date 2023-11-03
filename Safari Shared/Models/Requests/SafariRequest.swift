@@ -11,7 +11,7 @@ struct SafariRequest {
     
     let id: Int
     let name: String
-    let provider: Web3Provider
+    let provider: InpageProvider
     let body: Body
     let host: String
     let favicon: String?
@@ -19,19 +19,10 @@ struct SafariRequest {
     enum Body {
         case unknown(Unknown)
         case ethereum(Ethereum)
-        case solana(Solana)
-        case tezos(Tezos)
-        case near(Near)
         
         var value: SafariRequestBody {
             switch self {
             case .ethereum(let body):
-                return body
-            case .solana(let body):
-                return body
-            case .tezos(let body):
-                return body
-            case .near(let body):
                 return body
             case .unknown(let body):
                 return body
@@ -71,7 +62,7 @@ struct SafariRequest {
             self.favicon = nil
         }
         
-        let provider = Web3Provider(rawValue: json["provider"] as? String ?? "") ?? .unknown
+        let provider = InpageProvider(rawValue: json["provider"] as? String ?? "") ?? .unknown
         self.provider = provider
         
         var body: Body?
@@ -79,18 +70,6 @@ struct SafariRequest {
         case .ethereum:
             if let request = Ethereum(name: name, json: jsonBody) {
                 body = .ethereum(request)
-            }
-        case .solana:
-            if let request = Solana(name: name, json: jsonBody) {
-                body = .solana(request)
-            }
-        case .tezos:
-            if let request = Tezos(name: name, json: jsonBody) {
-                body = .tezos(request)
-            }
-        case .near:
-            if let request = Near(name: name, json: jsonBody) {
-                body = .near(request)
             }
         case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {

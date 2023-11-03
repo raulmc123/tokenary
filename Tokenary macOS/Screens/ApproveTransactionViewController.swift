@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Cocoa
-import WalletConnect
 import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
@@ -30,13 +29,13 @@ class ApproveTransactionViewController: NSViewController {
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var transaction: Transaction!
-    private var chain: EthereumChain!
+    private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
     private var didCallCompletion = false
     private var didEnableSpeedConfiguration = false
     private var peerMeta: PeerMeta?
     
-    static func with(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.chain = chain
         new.transaction = transaction
@@ -79,14 +78,14 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
+        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
             self?.transaction = updated
             self?.updateInterface()
         }
     }
     
     private func updateInterface() {
-        if chain != .ethereum {
+        if !chain.isEthMainnet {
             speedContainerStackView.isHidden = true
             gweiLabel.isHidden = true
             infoTextViewBottomConstraint.constant = 30
@@ -95,7 +94,7 @@ class ApproveTransactionViewController: NSViewController {
         okButton.isEnabled = transaction.hasFee
         
         enableSpeedConfigurationIfNeeded()
-        let meta = transaction.description(chain: chain, ethPrice: priceService.currentPrice)
+        let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))
         if metaTextView.string != meta {
             metaTextView.string = meta
         }

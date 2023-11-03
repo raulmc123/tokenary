@@ -12,9 +12,9 @@ extension SafariRequest {
         }
         
         struct ProviderConfiguration {
-            let provider: Web3Provider
+            let provider: InpageProvider
             let address: String
-            let network: EthereumChain?
+            let chainId: String?
         }
         
         let method: Method
@@ -29,7 +29,7 @@ extension SafariRequest {
             if let latestConfigurations = json["latestConfigurations"] as? [[String: Any]] {
                 for configuration in latestConfigurations {
                     guard let providerString = configuration["provider"] as? String,
-                          let provider = Web3Provider(rawValue: providerString),
+                          let provider = InpageProvider(rawValue: providerString),
                           let data = try? JSONSerialization.data(withJSONObject: configuration)
                     else { continue }
                     
@@ -37,16 +37,8 @@ extension SafariRequest {
                     case .ethereum:
                         guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
                               let address = response.results?.first else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: EthereumChain.withChainId(response.chainId)))
-                    case .solana:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data),
-                              let address = response.publicKey else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: nil))
-                    case .near:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Near.self, from: data),
-                              let address = response.account else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: nil))
-                    case .tezos, .unknown, .multiple:
+                        configurations.append(ProviderConfiguration(provider: provider, address: address, chainId: response.chainId))
+                    case .unknown, .multiple:
                         continue
                     }
                 }

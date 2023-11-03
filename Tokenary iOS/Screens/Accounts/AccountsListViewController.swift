@@ -7,11 +7,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     enum Section {
         case privateKeyWallets(cellModels: [CellModel])
-        case mnemonicWallet(cellModels: [CellModel])
+        case mnemonicWallet(cellModels: [CellModel], walletIndex: Int)
         
         var items: [CellModel] {
             switch self {
-            case let .mnemonicWallet(cellModels: cellModels):
+            case let .mnemonicWallet(cellModels: cellModels, _):
                 return cellModels
             case let .privateKeyWallets(cellModels: cellModels):
                 return cellModels
@@ -27,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var network = EthereumChain.ethereum
+    private var network = Networks.ethereum
     var selectAccountAction: SelectAccountAction?
     
     private var wallets: [TokenaryWallet] {
@@ -94,7 +94,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateCellModels()
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: .receievedWalletRequest, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         
         bottomOverlayView.isHidden = !forWalletSelection
         topOverlayView.isHidden = !forWalletSelection
@@ -110,7 +111,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             }
             updatePrimaryButton()
             
-            if let network = selectAccountAction.initialNetwork, self.network != network {
+            if let network = selectAccountAction.network, self.network != network {
                 selectNetwork(network)
             }
             
@@ -132,6 +133,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
+        requestAnUpdateIfNeeded()
         didAppear = true
         DispatchQueue.main.async { [weak self] in
             let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
@@ -144,6 +146,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 }
             }
         }
+    }
+    
+    private func requestAnUpdateIfNeeded() {
+        let configurationService = ConfigurationService.shared
+        guard !didAppear, configurationService.shouldPromptToUpdate else { return }
+        configurationService.didPromptToUpdate()
+        let alert = UIAlertController(title: Strings.thisAppVersionIsNoLongerSupported, message: Strings.pleaseGetANewOne, preferredStyle: .alert)
+        let notNowAction = UIAlertAction(title: Strings.notNow, style: .destructive)
+        let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+            UIApplication.shared.open(URL.updateApp)
+        }
+        alert.addAction(notNowAction)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
     
     private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
@@ -166,7 +182,18 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func walletForIndexPath(_ indexPath: IndexPath) -> TokenaryWallet {
-        let item = sections[indexPath.section].items[indexPath.row]
+        let section = sections[indexPath.section]
+        let items = section.items
+        
+        guard !items.isEmpty else {
+            if case let .mnemonicWallet(_, walletIndex) = section {
+                return wallets[walletIndex]
+            } else {
+                fatalError("no wallet")
+            }
+        }
+        
+        let item = items[indexPath.row]
         switch item {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: _):
             return wallets[walletIndex]
@@ -203,7 +230,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             
             let accounts = wallet.accounts
             let cellModels = (0..<accounts.count).map { CellModel.mnemonicAccount(walletIndex: index, accountIndex: $0) }
-            sections.append(.mnemonicWallet(cellModels: cellModels))
+            sections.append(.mnemonicWallet(cellModels: cellModels, walletIndex: index))
         }
         
         if !privateKeyAccountCellModels.isEmpty {
@@ -212,10 +239,12 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func processInput() {
-        let prefix = "tokenary://"
-        guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
-              let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
+        let inputLinkString = launchURL?.absoluteString
         launchURL = nil
+        
+        guard let inputLinkString = inputLinkString,
+              let prefix = ["https://tokenary.io/extension?query=", "tokenary://"].first(where: { inputLinkString.hasPrefix($0) == true }),
+              let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) else { return }
         
         let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
             self?.openSafari(requestId: request.id)
@@ -260,7 +289,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func openSafari(requestId: Int) {
         UIApplication.shared.openSafari()
-        toDismissAfterResponse[requestId]?.dismiss(animated: false)
+        let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
+        toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
@@ -272,7 +302,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumChain.allMainnets {
+        for network in Networks.allMainnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
@@ -291,7 +321,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumChain.allTestnets {
+        for network in Networks.allTestnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
@@ -303,7 +333,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func selectNetwork(_ network: EthereumChain) {
+    private func selectNetwork(_ network: EthereumNetwork) {
         self.network = network
         var tintedConfiguration = UIButton.Configuration.tinted()
         tintedConfiguration.image = networkButton.configuration?.image
@@ -364,10 +394,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
-            UIApplication.shared.open(URL.twitter)
+        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
+            UIApplication.shared.open(URL.x)
         }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
@@ -385,7 +415,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(twitterAction)
+        actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(shareInvite)

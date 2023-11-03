@@ -8,7 +8,6 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
-    private var network = EthereumChain.ethereum
     private var didCallCompletion = false
     private var didAppear = false
     var selectAccountAction: SelectAccountAction?
@@ -59,7 +58,11 @@ class AccountsListViewController: NSViewController {
     @IBOutlet weak var titleLabelTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var websiteNameStackView: NSStackView!
     @IBOutlet weak var websiteNameLabel: NSTextField!
-    @IBOutlet weak var networkButton: NSButton!
+    @IBOutlet weak var networkButton: NSButton! {
+        didSet {
+            networkButton.image = Images.network.with(pointSize: 14, weight: .regular)
+        }
+    }
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -83,7 +86,7 @@ class AccountsListViewController: NSViewController {
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         
         if let preselectedAccount = selectAccountAction?.selectedAccounts.first {
             scrollTo(specificWalletAccount: preselectedAccount)
@@ -95,25 +98,36 @@ class AccountsListViewController: NSViewController {
         getBackToRectIfNeeded()
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
-        promptSafariForLegacyUsersIfNeeded()
         
         if !didAppear {
             didAppear = true
             if let coin = selectAccountAction?.coinType, walletsManager.suggestedAccounts(coin: coin).isEmpty, !wallets.isEmpty {
                 Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
             }
+            requestAnUpdateIfNeeded()
         }
     }
     
-    private func promptSafariForLegacyUsersIfNeeded() {
-        guard Defaults.shouldPromptSafariForLegacyUsers else { return }
-        Defaults.shouldPromptSafariForLegacyUsers = false
-        Alert.showSafariPrompt()
+    private func requestAnUpdateIfNeeded() {
+        let configurationService = ConfigurationService.shared
+        guard configurationService.shouldPromptToUpdate else { return }
+        configurationService.didPromptToUpdate()
+        
+        let alert = Alert()
+        alert.messageText = Strings.thisAppVersionIsNoLongerSupported
+        alert.informativeText = Strings.pleaseGetANewOne
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.notNow)
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL.updateApp)
+        }
     }
     
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
+            let network = selectAccountAction?.network ?? Networks.ethereum
             selectAccountAction?.completion(network, specificWalletAccounts)
         }
     }
@@ -129,20 +143,22 @@ class AccountsListViewController: NSViewController {
                 secondaryButton.keyEquivalent = ""
             }
             
-            if networkButton.menu == nil {
+            if selectAccountAction.source == .walletConnect {
+                networkButton.isHidden = true
+            } else if networkButton.menu == nil {
                 let menu = NSMenu()
-                for mainnet in EthereumChain.allMainnets {
+                for mainnet in Networks.allMainnets {
                     let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = mainnet.id
+                    item.tag = mainnet.chainId
                     menu.addItem(item)
                 }
                 
                 let submenuItem = NSMenuItem()
                 submenuItem.title = Strings.testnets
                 let submenu = NSMenu()
-                for testnet in EthereumChain.allTestnets {
+                for testnet in Networks.allTestnets {
                     let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = testnet.id
+                    item.tag = testnet.chainId
                     submenu.addItem(item)
                 }
                 
@@ -155,7 +171,7 @@ class AccountsListViewController: NSViewController {
                 let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
                 menu.addItem(titleItem)
                 
-                if let network = selectAccountAction.initialNetwork, network != self.network {
+                if let network = selectAccountAction.network, !network.isEthMainnet {
                     selectNetwork(network)
                 }
             }
@@ -243,17 +259,17 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard let menuItem = sender as? NSMenuItem,
-              let selectedNetwork = EthereumChain(rawValue: menuItem.tag) else { return }
+              let selectedNetwork = Networks.withChainId(menuItem.tag) else { return }
         selectNetwork(selectedNetwork)
     }
     
-    private func selectNetwork(_ network: EthereumChain) {
+    private func selectNetwork(_ network: EthereumNetwork) {
         let title = network.name + " — " + Strings.isSelected
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         networkButton.menu?.items.last?.attributedTitle = attributedTitle
-        networkButton.bezelColor = .selectedControlColor
-        self.network = network
+        networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
+        selectAccountAction?.network = network
     }
 
     @objc private func didClickCreateAccount() {

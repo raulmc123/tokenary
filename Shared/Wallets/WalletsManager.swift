@@ -22,33 +22,14 @@ final class WalletsManager {
     private init() {}
 
     func start() {
-        try? load()
+        try? loadWalletsFromKeychain()
     }
-    
-    #if os(macOS)
-    func migrateFromLegacyIfNeeded() {
-        guard !Defaults.didMigrateKeychainFromTokenaryV1 else { return }
-        let legacyKeystores = keychain.getLegacyKeystores()
-        if !legacyKeystores.isEmpty, let legacyPassword = keychain.legacyPassword {
-            keychain.save(password: legacyPassword)
-            for keystore in legacyKeystores {
-                _ = try? importJSON(keystore,
-                                    name: defaultWalletName,
-                                    password: legacyPassword,
-                                    newPassword: legacyPassword,
-                                    coin: .ethereum,
-                                    onlyToKeychain: true)
-            }
-            Defaults.shouldPromptSafariForLegacyUsers = true
-        }
-        Defaults.didMigrateKeychainFromTokenaryV1 = true
-    }
-    #endif
     
     func validateWalletInput(_ input: String) -> InputValidationResult {
-        if Mnemonic.isValid(mnemonic: input) {
+        let trimmedInput = input.singleSpaced
+        if Mnemonic.isValid(mnemonic: trimmedInput) {
             return .valid
-        } else if let data = Data(hexString: input) {
+        } else if let data = Data(hexString: trimmedInput) {
             return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve) ? .valid : .invalid
         } else {
             return input.maybeJSON ? .requiresPassword : .invalid
@@ -64,18 +45,14 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
-    // TODO: deprecate
-    func getWallet(ethereumAddress: String) -> TokenaryWallet? {
-        return wallets.first(where: { $0.ethereumAddress?.lowercased() == ethereumAddress.lowercased() })
-    }
-    
     func addWallet(input: String, inputPassword: String?) throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
         let defaultCoin = CoinType.ethereum
-        if Mnemonic.isValid(mnemonic: input) {
-            return try importMnemonic(input, name: name, encryptPassword: password)
-        } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
+        let trimmedInput = input.singleSpaced
+        if Mnemonic.isValid(mnemonic: trimmedInput) {
+            return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
+        } else if let data = Data(hexString: trimmedInput), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
             return try importPrivateKey(privateKey, name: name, password: password, coin: defaultCoin, onlyToKeychain: false)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
             return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin, onlyToKeychain: false)
@@ -193,7 +170,7 @@ final class WalletsManager {
         try keychain.removeAllWallets()
     }
     
-    private func load() throws {
+    private func loadWalletsFromKeychain() throws {
         let ids = keychain.getAllWalletsIds()
         for id in ids {
             guard let data = keychain.getWalletData(id: id), let key = StoredKey.importJSON(json: data) else { continue }
@@ -259,7 +236,7 @@ final class WalletsManager {
     }
     
     private func postWalletsChangedNotification() {
-        NotificationCenter.default.post(name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.post(name: .walletsChanged, object: nil)
     }
     
     private var defaultWalletName = ""
@@ -269,6 +246,39 @@ final class WalletsManager {
         let date = Date().timeIntervalSince1970
         let walletId = "\(uuid)-\(date)"
         return walletId
+    }
+    
+}
+
+extension WalletsManager {
+    
+    func getAccount(coin: CoinType, address: String) -> Account? {
+        return getWalletAndAccount(coin: coin, address: address)?.1
+    }
+    
+    func getPrivateKey(coin: CoinType, address: String) -> PrivateKey? {
+        guard let password = Keychain.shared.password else { return nil }
+        if let (wallet, account) = getWalletAndAccount(coin: coin, address: address) {
+            return try? wallet.privateKey(password: password, account: account)
+        } else {
+            return nil
+        }
+    }
+    
+    func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, Account)? {
+        let searchLowercase = coin == .ethereum
+        let needle = searchLowercase ? address.lowercased() : address
+        
+        for wallet in wallets {
+            for account in wallet.accounts where account.coin == coin {
+                let match = searchLowercase ? account.address.lowercased() == needle : account.address == needle
+                if match {
+                    return (wallet, account)
+                }
+            }
+        }
+        
+        return nil
     }
     
 }

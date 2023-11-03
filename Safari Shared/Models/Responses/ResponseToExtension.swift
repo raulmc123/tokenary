@@ -9,9 +9,6 @@ struct ResponseToExtension {
     
     enum Body {
         case ethereum(Ethereum)
-        case solana(Solana)
-        case tezos(Tezos)
-        case near(Near)
         case multiple(Multiple)
         
         var json: [String: Any] {
@@ -20,12 +17,6 @@ struct ResponseToExtension {
             
             switch self {
             case .ethereum(let body):
-                data = try? jsonEncoder.encode(body)
-            case .solana(let body):
-                data = try? jsonEncoder.encode(body)
-            case .near(let body):
-                data = try? jsonEncoder.encode(body)
-            case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
             case .multiple(let body):
                 let dict: [String: Any] = [
@@ -44,16 +35,10 @@ struct ResponseToExtension {
             }
         }
         
-        var provider: Web3Provider {
+        var provider: InpageProvider {
             switch self {
             case .ethereum:
                 return .ethereum
-            case .solana:
-                return .solana
-            case .near:
-                return .near
-            case .tezos:
-                return .tezos
             case .multiple:
                 return .multiple
             }
@@ -69,6 +54,7 @@ struct ResponseToExtension {
         
         if let error = error {
             json["error"] = error
+            json["provider"] = request.provider.rawValue
         }
         
         let bodyJSON = body?.json ?? [:]

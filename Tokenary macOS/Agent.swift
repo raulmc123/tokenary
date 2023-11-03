@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Cocoa
-import WalletConnect
 import SafariServices
 import LocalAuthentication
 import WalletCore
@@ -9,13 +8,11 @@ import WalletCore
 class Agent: NSObject {
     
     enum ExternalRequest {
-        case wcSession(WCSession)
         case safari(SafariRequest)
     }
     
     static let shared = Agent()
     
-    private let walletConnect = WalletConnect.shared
     private let walletsManager = WalletsManager.shared
     
     private override init() { super.init() }
@@ -30,12 +27,8 @@ class Agent: NSObject {
     var statusBarButtonIsBlocked = false
     
     func start() {
-        checkPasteboardAndOpen()
+        open()
         setupStatusBarItem()
-    }
-    
-    func reopen() {
-        checkPasteboardAndOpen()
     }
     
     func showInitialScreen(externalRequest: ExternalRequest?) {
@@ -65,7 +58,6 @@ class Agent: NSObject {
                 if success {
                     self?.didEnterPasswordOnStart = true
                     self?.showInitialScreen(externalRequest: externalRequest)
-                    self?.walletConnect.restartSessions()
                 }
             }
             return
@@ -78,22 +70,12 @@ class Agent: NSObject {
             processSafariRequest(request)
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
-            
-            if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
-                accountsList.selectAccountAction = SelectAccountAction(peer: nil,
-                                                                       coinType: .ethereum,
-                                                                       selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .ethereum)),
-                                                                       initiallyConnectedProviders: Set(),
-                                                                       initialNetwork: nil,
-                                                                       completion: completion)
-            }
-            
             let windowController = Window.showNew(closeOthers: accountsList.selectAccountAction == nil)
             windowController.contentViewController = accountsList
         }
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let window = windowController.window
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {
@@ -122,11 +104,6 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, [SpecificWalletAccount]?) -> Void)? {
-        let session = getSessionFromPasteboard()
-        return onSelectedWallet(session: session)
-    }
-    
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.tokenary)
         
@@ -134,14 +111,14 @@ class Agent: NSObject {
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: Strings.viewOnTwitter.withEllipsis, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let xItem = NSMenuItem(title: Strings.viewOnX.withEllipsis, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         safariItem.target = self
         githubItem.target = self
-        twitterItem.target = self
+        xItem.target = self
         mailItem.target = self
         quitItem.target = self
         
@@ -150,7 +127,7 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(twitterItem)
+        menu.addItem(xItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
         menu.addItem(NSMenuItem.separator())
@@ -177,8 +154,8 @@ class Agent: NSObject {
         }
     }
     
-    @objc private func didSelectTwitterMenuItem() {
-        NSWorkspace.shared.open(URL.twitter)
+    @objc private func didSelectXMenuItem() {
+        NSWorkspace.shared.open(URL.x)
     }
     
     @objc private func didSelectGitHubMenuItem() {
@@ -194,7 +171,7 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectShowMenuItem() {
-        checkPasteboardAndOpen()
+        open()
     }
     
     @objc private func didSelectQuitMenuItem() {
@@ -213,45 +190,12 @@ class Agent: NSObject {
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
         guard !statusBarButtonIsBlocked, let event = NSApp.currentEvent, event.type == .rightMouseUp || event.type == .leftMouseUp else { return }
         
-        if let session = getSessionFromPasteboard() {
-            showInitialScreen(externalRequest: .wcSession(session))
-        } else {
-            statusBarItem.menu = statusBarMenu
-            statusBarItem.button?.performClick(nil)
-        }
+        statusBarItem.menu = statusBarMenu
+        statusBarItem.button?.performClick(nil)
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, [SpecificWalletAccount]?) -> Void)? {
-        guard let session = session else { return nil }
-        return { [weak self] chain, specificWalletAccounts in
-            guard let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum else {
-                Window.closeAllAndActivateBrowser(specific: nil)
-                return
-            }
-            self?.connectWallet(session: session, chainId: chain.id, walletId: specificWalletAccount.walletId)
-        }
-    }
-    
-    private func getSessionFromPasteboard() -> WCSession? {
-        let pasteboard = NSPasteboard.general
-        let link = pasteboard.string(forType: .string) ?? ""
-        let session = walletConnect.sessionWithLink(link)
-        if session != nil {
-            pasteboard.clearContents()
-        }
-        return session
-    }
-    
-    private func checkPasteboardAndOpen() {
-        let request: ExternalRequest?
-        
-        if let session = getSessionFromPasteboard() {
-            request = .wcSession(session)
-        } else {
-            request = .none
-        }
-        
-        showInitialScreen(externalRequest: request)
+    func open() {
+        showInitialScreen(externalRequest: .none)
     }
     
     func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, browser: Browser?, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
@@ -289,18 +233,6 @@ class Agent: NSObject {
             }
         } else {
             showPasswordScreen()
-        }
-    }
-    
-    private func connectWallet(session: WCSession, chainId: Int, walletId: String) {
-        let windowController = Window.showNew(closeOthers: true)
-        let window = windowController.window
-        windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
-        
-        walletConnect.connect(session: session, chainId: chainId, walletId: walletId) { [weak window] _ in
-            if window?.isVisible == true {
-                Window.closeAllAndActivateBrowser(specific: nil)
-            }
         }
     }
 

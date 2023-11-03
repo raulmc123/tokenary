@@ -8,9 +8,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let agent = Agent.shared
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
-    private let networkMonitor = NetworkMonitor.shared
+    private let configurationService = ConfigurationService.shared
     private let walletsManager = WalletsManager.shared
-    private let walletConnect = WalletConnect.shared
     
     private var didFinishLaunching = false
     private var initialExternalRequest: Agent.ExternalRequest?
@@ -31,14 +30,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue)
     }
     
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
-        walletsManager.migrateFromLegacyIfNeeded()
-        
+    func applicationDidFinishLaunching(_ aNotification: Notification) {        
         agent.start()
         gasService.start()
         priceService.start()
-        networkMonitor.start()
         walletsManager.start()
+        configurationService.check()
         
         didFinishLaunching = true
         
@@ -49,7 +46,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        agent.reopen()
+        agent.open()
         return true
     }
     
@@ -60,14 +57,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
-        
-        for scheme in ["https://tokenary.io/wc?uri=", "tokenary://wc?uri="] {
-            if url.hasPrefix(scheme), let link = url.dropFirst(scheme.count).removingPercentEncoding, let session = walletConnect.sessionWithLink(link) {
-                processExternalRequest(.wcSession(session))
-                return
-            }
-        }
-        
         let safariPrefix = "tokenary://safari?request="
         if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
             processExternalRequest(.safari(request))

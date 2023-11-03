@@ -30,6 +30,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 #endif
             case .didCompleteRequest:
                 ExtensionBridge.removeResponse(id: id)
+            case .cancelRequest:
+                ExtensionBridge.removeRequest(id: id)
             }
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
@@ -37,8 +39,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             self.context = context
             if case let .ethereum(ethereumRequest) = request.body,
                ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
-                if let chain = ethereumRequest.switchToChain {
-                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                if let switchToChainId = ethereumRequest.switchToChainId, let rpcURL = Nodes.getNode(chainId: switchToChainId) {
+                    let chainId = String.hex(switchToChainId, withPrefix: true)
+                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId, rpcURL: rpcURL)
                     let response = ResponseToExtension(for: request, body: .ethereum(responseBody))
                     respond(with: response.json)
                 } else {

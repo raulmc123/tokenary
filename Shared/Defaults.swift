@@ -15,24 +15,6 @@ struct Defaults {
         }
     }
     
-    static var shouldPromptSafariForLegacyUsers: Bool {
-        get {
-            return userDefaults.bool(forKey: "shouldPromptSafariForLegacyUsers")
-        }
-        set {
-            userDefaults.set(newValue, forKey: "shouldPromptSafariForLegacyUsers")
-        }
-    }
-    
-    static var didMigrateKeychainFromTokenaryV1: Bool {
-        get {
-            return userDefaults.bool(forKey: "didMigrateKeychainFromTokenaryV1")
-        }
-        set {
-            userDefaults.set(newValue, forKey: "didMigrateKeychainFromTokenaryV1")
-        }
-    }
-    
     static var reviewRequestsGoodMomentsCount: Int {
         get {
             return userDefaults.integer(forKey: "reviewRequestsGoodMomentsCount")
@@ -42,21 +24,12 @@ struct Defaults {
         }
     }
     
-    static var storedSessions: [String: SessionStorage.Item] {
+    static var didReceiveShouldUpdateAppNotification: Bool {
         get {
-            return userDefaults.codableValue(type: [String: SessionStorage.Item].self, forKey: "storedSessions") ?? [:]
+            return userDefaults.bool(forKey: "didReceiveShouldUpdateAppNotification")
         }
         set {
-            userDefaults.setCodable(newValue, forKey: "storedSessions")
-        }
-    }
-    
-    static var latestInteractionDates: [String: Date] {
-        get {
-            return userDefaults.codableValue(type: [String: Date].self, forKey: "latestInteractionDates") ?? [:]
-        }
-        set {
-            userDefaults.setCodable(newValue, forKey: "latestInteractionDates")
+            userDefaults.set(newValue, forKey: "didReceiveShouldUpdateAppNotification")
         }
     }
     
